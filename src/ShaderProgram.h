@@ -12,9 +12,15 @@ struct ShaderProgram
 {
   u32 descriptor;
 
+  ShaderProgram() = default;
+  ShaderProgram(std::string vertexShaderCode, std::string fragmentShaderCode)
+  {
+    create(vertexShaderCode, fragmentShaderCode);
+  }
+
   ShaderProgram &create(std::string vertexShaderCode, std::string fragmentShaderCode);
 
-  void bind() const;
+  void use() const;
   void destroy();
 
   void setUniform(const std::string &name, int value) const;

@@ -35,7 +35,7 @@ ShaderProgram &ShaderProgram::create(std::string vertexShaderCode, std::string f
   return *this;
 }
 
-void ShaderProgram::bind() const
+void ShaderProgram::use() const
 {
   glUseProgram(descriptor);
 }

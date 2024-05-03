@@ -23,6 +23,61 @@ float lastX = DEFAULT_WINDOW_WIDTH / 2.0f;
 float lastY = DEFAULT_WINDOW_HEIGHT / 2.0f;
 bool firstMouse = true;
 
+Decal testDecal{};
+
+struct Framebuffer
+{
+  GLuint id;
+  GLuint colorAttachment = 0;
+  GLuint depthAttachment = 0;
+
+  void create(int width, int height, bool createColorAttachment = true, bool createDepthAttachment = true)
+  {
+    // Generate framebuffer
+    glGenFramebuffers(1, &id);
+    glBindFramebuffer(GL_FRAMEBUFFER, id);
+
+    // Create color attachment texture
+    if (createColorAttachment)
+    {
+      glGenTextures(1, &colorAttachment);
+      glBindTexture(GL_TEXTURE_2D, colorAttachment);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorAttachment, 0);
+    }
+
+    // Create depth attachment texture
+    if (createDepthAttachment)
+    {
+      glGenTextures(1, &depthAttachment);
+      glBindTexture(GL_TEXTURE_2D, depthAttachment);
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthAttachment, 0);
+    }
+
+    // Check if framebuffer is complete
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+      std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    unbind();
+  }
+
+  void bind() { glBindFramebuffer(GL_FRAMEBUFFER, id); }
+
+  void unbind() { glBindFramebuffer(GL_FRAMEBUFFER, 0); }
+
+  void clear(glm::vec4 color, bool clearColor = true, bool clearDepth = true)
+  {
+    glClearColor(color.x, color.y, color.z, color.w);
+    glClear((clearColor ? GL_COLOR_BUFFER_BIT : 0) | (clearDepth ? GL_DEPTH_BUFFER_BIT : 0));
+  }
+};
+
 int main()
 {
   if (!createRenderingContext() || globalContext.window == nullptr)
@@ -34,13 +89,14 @@ int main()
 
   static_assert(sizeof(GLuint) == sizeof(u32), "GLuint should be u32");
 
-  ShaderProgram sceneShaderProgram{};
-  sceneShaderProgram.create(
+  ShaderProgram sceneShaderProgram(
     readContentFromFile("src/shaders/sceneShader.vs"), readContentFromFile("src/shaders/sceneShader.fs"));
 
-  ShaderProgram mergeSceneShaderProgram{};
-  mergeSceneShaderProgram.create(
+  ShaderProgram mergeSceneShaderProgram(
     readContentFromFile("src/shaders/mergeSceneShader.vs"), readContentFromFile("src/shaders/mergeSceneShader.fs"));
+
+  ShaderProgram decalsShaderProgram(
+    readContentFromFile("src/shaders/decalShader.vs"), readContentFromFile("src/shaders/decalShader.fs"));
 
   // Cube object
   SimpleMesh cubeMesh = createCubeMesh();
@@ -56,64 +112,30 @@ int main()
   SimpleMesh quadMesh = createQuadMesh();
 
   // Decal object
-  Decal testDecal{};
   testDecal.projectionBoxMesh = createPrimitiveCube();
   testDecal.setPosition(glm::vec3(-0.5, 0.5, -1));
   testDecal.setScale(glm::vec3(0.5));
   testDecal.texture.createTextureFromFile("decal.jpg");
 
-  // Cube mesh for displaying decals projection
-  SimpleMesh wireframeCubeMesh = createPrimitiveCube();
+  Framebuffer sceneFBO{};
+  sceneFBO.create(globalContext.windowWidth, globalContext.windowHeight);
 
-  GLuint framebuffer;
-  glGenFramebuffers(1, &framebuffer);
-  glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+  Framebuffer decalsFBO{};
+  decalsFBO.create(globalContext.windowWidth, globalContext.windowHeight, false, true);
 
-  // generate texture
-  GLuint textureColorbuffer{};
-  glGenTextures(1, &textureColorbuffer);
-  glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
-  glTexImage2D(
-    GL_TEXTURE_2D, 0, GL_RGB, globalContext.windowWidth, globalContext.windowHeight, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-  glBindTexture(GL_TEXTURE_2D, 0);
+  // shader textures configuration
+  // --------------------
+  sceneShaderProgram.use();
+  sceneShaderProgram.setUniform("texture1", 0);
 
-  // attach it to currently bound framebuffer object
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureColorbuffer, 0);
+  decalsShaderProgram.use();
+  decalsShaderProgram.setUniform("depthMap", 0);
 
-  // Create Renderbuffer for Depth and Stencil attachments
-  /*GLuint renderBufferObject;
-  glGenRenderbuffers(1, &renderBufferObject);
-  glBindRenderbuffer(GL_RENDERBUFFER, renderBufferObject);
-  glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, globalContext.windowWidth, globalContext.windowHeight);
-  glBindRenderbuffer(GL_RENDERBUFFER, 0);*/
+  mergeSceneShaderProgram.use();
+  mergeSceneShaderProgram.setUniform("renderedSceneTexture", 0);
 
-  // Attach created Renderbuffer to Framebuffer with Depth_Stencil attachment
-  // glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderBufferObject);
-
-  GLuint textureDepthBuffer{};
-  glGenTextures(1, &textureDepthBuffer);
-  glBindTexture(GL_TEXTURE_2D, textureDepthBuffer);
-  glTexImage2D(GL_TEXTURE_2D,
-    0,
-    GL_DEPTH_COMPONENT,
-    globalContext.windowWidth,
-    globalContext.windowHeight,
-    0,
-    GL_DEPTH_COMPONENT,
-    GL_FLOAT,
-    nullptr);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-  glBindTexture(GL_TEXTURE_2D, 0);
-  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, textureDepthBuffer, 0);
-
-  if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-    std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  testDecal.setScale(glm::vec3(0.3f, 0.3f, 1.0f));
+  testDecal.setPosition(glm::vec3(-0.5, 0.5, -1));
 
   while (!glfwWindowShouldClose(globalContext.window))
   {
@@ -124,25 +146,21 @@ int main()
     if (glfwGetKey(globalContext.window, GLFW_KEY_ENTER) == GLFW_PRESS)
       regenerateRandomTransformationMatrices(cubesModelMatrices);
 
-    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-    {
-      glClearColor(0.8f, 0.8f, 0.8f, 1.0f);
-      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    }
+    sceneFBO.bind();
+    sceneFBO.clear(glm::vec4(0.8f, 0.8f, 0.8f, 1.0f), true, true);
 
     // Enable depth test
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
 
-    cubeTexture.bind();
-    sceneShaderProgram.bind();
-    sceneShaderProgram.setUniform("texture1", 0);
-
-    const glm::mat4 projection = camera.GetProjectionMatrix(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
+    const glm::mat4 projection = camera.GetProjectionMatrix(globalContext.windowWidth, globalContext.windowHeight);
     const glm::mat4 view = camera.GetViewMatrix();
 
+    sceneShaderProgram.use();
     sceneShaderProgram.setUniform("view", view);
     sceneShaderProgram.setUniform("projection", projection);
+
+    cubeTexture.bind();
 
     glBindVertexArray(cubeMesh.vao);
     for (const glm::mat4 &cubeModel : cubesModelMatrices)
@@ -152,22 +170,48 @@ int main()
     }
 
     // Render decals
-    // {
-    //   // Draw decal's projection volume
-    //   glBindVertexArray(testDecal.projectionBoxMesh.vao);
-    //   glUniformMatrix4fv(glGetUniformLocation(sceneShaderProgram, "model"),
-    //     1,
-    //     GL_FALSE,
-    //     glm::value_ptr(testDecal.transform.getTransformMatrix()));
+    {
+      // Draw decal's projection volume
+      glBindVertexArray(testDecal.projectionBoxMesh.vao);
 
-    //   glDrawArrays(GL_LINES, 0, 36);
+      const glm::mat4 decalModelMatrix = testDecal.transform.getTransformMatrix();
+      sceneShaderProgram.use();
+      sceneShaderProgram.setUniform("model", decalModelMatrix);
+      glDrawArrays(GL_LINES, 0, 36);
+
+      // Draw decals
+      glEnable(GL_DEPTH_TEST);
+      glDepthFunc(GL_LESS);
+
+      decalsFBO.bind();
+      decalsFBO.clear({ 0.7f, 0.7f, 0.7f, 1.0f }, false, true);
+
+      // attaching scene color attachment to decals fbo
+      decalsFBO.colorAttachment = sceneFBO.colorAttachment;
+      glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, decalsFBO.colorAttachment, 0);
+
+      decalsShaderProgram.use();
+
+      float near_plane = 0.1f, far_plane = 1.1f;
+      // testDecal.setScale(glm::vec3(0.3f, 0.3f, 1.0f));
+      // testDecal.setPosition(glm::vec3(-0.5, 0.5, -1));
+      
+      // glm::mat4 decalProjection = glm::ortho(-0.15f, 0.15f, -0.15f, 0.15f, near_plane, far_plane);
+      // glm::vec3 decalEye = glm::vec3(testDecal.transform.position.x,
+      //   testDecal.transform.position.y,
+      //   testDecal.transform.position.z + (far_plane - near_plane) / 2.0f);
 
 
-    //   testDecal.texture.bind();
-    //   testDecal.transform.getTransformMatrix();
+      const glm::mat4 viewProjection = projection * view;
+      decalsShaderProgram.setUniform("view_projection", viewProjection);
+      decalsShaderProgram.setUniform("model", decalModelMatrix);
 
-    //   glUniform1i(glGetUniformLocation(sceneShaderProgram, "texture1"), 0);
-    // }
+      glBindVertexArray(testDecal.projectionBoxMesh.vao);
+
+      glBindTexture(GL_TEXTURE_2D, sceneFBO.depthAttachment);
+
+      glDrawArrays(GL_TRIANGLES, 0, 36);
+    }
 
     // Render final result (into default framebuffer)
     {
@@ -175,11 +219,11 @@ int main()
       glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT);
 
-      mergeSceneShaderProgram.bind();
+      mergeSceneShaderProgram.use();
       glBindVertexArray(quadMesh.vao);
       glDisable(GL_DEPTH_TEST);
 
-      glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
+      glBindTexture(GL_TEXTURE_2D, sceneFBO.colorAttachment);
       mergeSceneShaderProgram.setUniform("renderedSceneTexture", 0);
 
       glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -235,4 +279,27 @@ void processInput(GLFWwindow *window)
     camera.ProcessKeyboard(LEFT, TimeManager::getDeltaTime(), accelerationEnabled);
   if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
     camera.ProcessKeyboard(RIGHT, TimeManager::getDeltaTime(), accelerationEnabled);
+
+
+  const bool isDecalMovement =
+    glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS
+    || glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS;
+
+  if (isDecalMovement)
+  {
+    constexpr float movementSpeed = 5.1f;
+    float velocity = movementSpeed * TimeManager::getDeltaTime();
+
+    const glm::vec3 frontDirection = glm::vec3(0.0f, 0.0f, -1.0f);
+    const glm::vec3 rightDirection = glm::vec3(1.0f, 0.0f, 0.0f);
+
+    if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+      testDecal.setPosition(testDecal.transform.position + frontDirection * velocity);
+    if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+      testDecal.setPosition(testDecal.transform.position - frontDirection * velocity);
+    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+      testDecal.setPosition(testDecal.transform.position - rightDirection * velocity);
+    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+      testDecal.setPosition(testDecal.transform.position + rightDirection * velocity);
+  }
 }
