@@ -2,7 +2,7 @@
 .vscode
 .git
 .idea
-.x64
+x64
 out
 build
 bin
