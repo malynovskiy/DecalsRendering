@@ -139,18 +139,19 @@ int main()
 
       decalsShaderProgram.use();
 
-      float near_plane = 0.1f, far_plane = 1.1f;
-      // testDecal.setScale(glm::vec3(0.3f, 0.3f, 1.0f));
-      // testDecal.setPosition(glm::vec3(-0.5, 0.5, -1));
-      
-      // glm::mat4 decalProjection = glm::ortho(-0.15f, 0.15f, -0.15f, 0.15f, near_plane, far_plane);
-      // glm::vec3 decalEye = glm::vec3(testDecal.transform.position.x,
-      //   testDecal.transform.position.y,
-      //   testDecal.transform.position.z + (far_plane - near_plane) / 2.0f);
+      float near_plane = 0.1f, far_plane = 10.1f;
 
+      glm::mat4 decalProjection = glm::ortho(-0.15f, 0.15f, -0.15f, 0.15f, near_plane, far_plane);
+      glm::vec3 decalEye = glm::vec3(testDecal.transform.position.x,
+        testDecal.transform.position.y,
+        testDecal.transform.position.z + (far_plane - near_plane) / 2.0f);
+      glm::vec3 forwardDirection = glm::vec3(0.0f, 0.0f, -1.0f);
+      glm::mat4 decalView = glm::lookAt(decalEye, decalEye + forwardDirection, glm::vec3(0.0f, 1.0f, 0.0f));
 
       const glm::mat4 viewProjection = projection * view;
+      const glm::mat4 decalViewProjection = decalProjection * decalView;
       decalsShaderProgram.setUniform("view_projection", viewProjection);
+      decalsShaderProgram.setUniform("decal_view_projection", decalViewProjection);
       decalsShaderProgram.setUniform("model", decalModelMatrix);
 
       glBindVertexArray(testDecal.projectionBoxMesh.vao);
