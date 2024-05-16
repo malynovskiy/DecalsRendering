@@ -18,10 +18,9 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow *window);
 unsigned int loadTexture(const char *path);
-void renderScene(const Shader &shader);
+void renderScene(Shader &shader, Model &testModel);
 void renderCube(bool wireframe = false);
 void renderQuad();
-
 
 struct DecalProjectorBox
 {
@@ -136,6 +135,8 @@ int main()
     Shader debugDepthQuad("src/shaders/debug_quad.vert", "src/shaders/debug_quad_depth.frag");
     Shader decalsShader("src/shaders/decal_shader.vert", "src/shaders/decal_shader.frag");
 
+    Model backpackModel(FileSystem::getPath("resources/objects/cyborg/cyborg.obj"));
+
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
     float planeVertices[] = {
@@ -218,12 +219,13 @@ int main()
     shader.use();
     shader.setInt("diffuseTexture", 0);
     shader.setInt("shadowMap", 1);
+
     debugDepthQuad.use();
     debugDepthQuad.setInt("depthMap", 0);
 
     decalsShader.use();
     decalsShader.setInt("decalTexture", 0);
-    decalsShader.setInt("shadowMap", 1);
+    decalsShader.setInt("depthMap", 1);
 
     // render loop
     // -----------
@@ -265,9 +267,7 @@ int main()
         glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
         glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
             glClear(GL_DEPTH_BUFFER_BIT);
-            //glActiveTexture(GL_TEXTURE0);
-            //glBindTexture(GL_TEXTURE_2D, woodTexture);
-            renderScene(simpleDepthShader);
+            renderScene(simpleDepthShader, backpackModel);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
         // 1.5. render depth of scene to texture (from decals's perspective)
@@ -286,7 +286,7 @@ int main()
         glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
         glBindFramebuffer(GL_FRAMEBUFFER, decalDepthMapFBO);
         glClear(GL_DEPTH_BUFFER_BIT);
-        renderScene(simpleDepthShader);
+        renderScene(simpleDepthShader, backpackModel);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
         // reset viewport
@@ -308,7 +308,7 @@ int main()
         glBindTexture(GL_TEXTURE_2D, woodTexture);
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, depthMap);
-        renderScene(shader);
+        renderScene(shader, backpackModel);
 
         // render decal position cube
         glm::mat4 model = glm::mat4(1.f);
@@ -324,22 +324,23 @@ int main()
         shader.setMat4("model", model);
         renderCube(true);
 
+        // 3. render decal
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
         glDepthFunc(GL_LEQUAL);
-        // 3. render decal
+
         decalsShader.use();
         decalsShader.setMat4("projection", projection);
         decalsShader.setMat4("view", view);
         // set light uniforms
-        decalsShader.setVec3("viewPos", camera.Position);
-        decalsShader.setVec3("lightPos", decal.position);
-        decalsShader.setMat4("lightSpaceMatrix", decalSpaceMatrix);
+        decalsShader.setVec3("cameraPosition", camera.Position);
+        decalsShader.setVec3("decalPosition", decal.position);
+        decalsShader.setMat4("decalSpaceMatrix", decalSpaceMatrix);
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, faceTexture);
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, decalDepthMap);
-        renderScene(shader);
+        renderScene(decalsShader, backpackModel);
 
         // render Depth map to quad for visual debugging
         // ---------------------------------------------
@@ -368,30 +369,36 @@ int main()
 
 // renders the 3D scene
 // --------------------
-void renderScene(const Shader &shader)
+void renderScene(Shader &shader, Model& testModel)
 {
     // floor
-    glm::mat4 model = glm::mat4(1.0f);
-    shader.setMat4("model", model);
+    glm::mat4 modelMatrix = glm::mat4(1.0f);
+    shader.setMat4("model", modelMatrix);
     glBindVertexArray(planeVAO);
     glDrawArrays(GL_TRIANGLES, 0, 6);
     // cubes
-    model = glm::mat4(1.0f);
-    model = glm::translate(model, glm::vec3(0.0f, 1.5f, 0.0));
-    model = glm::scale(model, glm::vec3(0.5f));
-    shader.setMat4("model", model);
+    modelMatrix = glm::mat4(1.0f);
+    modelMatrix = glm::translate(modelMatrix, glm::vec3(0.0f, 1.5f, -2.0));
+    modelMatrix = glm::scale(modelMatrix, glm::vec3(0.5f));
+    shader.setMat4("model", modelMatrix);
     renderCube();
-    model = glm::mat4(1.0f);
-    model = glm::translate(model, glm::vec3(2.0f, 0.0f, 1.0));
-    model = glm::scale(model, glm::vec3(0.5f));
-    shader.setMat4("model", model);
+    modelMatrix = glm::mat4(1.0f);
+    modelMatrix = glm::translate(modelMatrix, glm::vec3(2.0f, 0.0f, 1.0));
+    modelMatrix = glm::scale(modelMatrix, glm::vec3(0.5f));
+    shader.setMat4("model", modelMatrix);
     renderCube();
-    model = glm::mat4(1.0f);
-    model = glm::translate(model, glm::vec3(-1.0f, 0.0f, 2.0));
-    model = glm::rotate(model, glm::radians(60.0f), glm::normalize(glm::vec3(1.0, 0.0, 1.0)));
-    model = glm::scale(model, glm::vec3(0.25));
-    shader.setMat4("model", model);
+    modelMatrix = glm::mat4(1.0f);
+    modelMatrix = glm::translate(modelMatrix, glm::vec3(-1.0f, 0.0f, 2.0));
+    modelMatrix = glm::rotate(modelMatrix, glm::radians(60.0f), glm::normalize(glm::vec3(1.0, 0.0, 1.0)));
+    modelMatrix = glm::scale(modelMatrix, glm::vec3(0.25));
+    shader.setMat4("model", modelMatrix);
     renderCube();
+
+    modelMatrix = glm::mat4(1);
+    modelMatrix = glm::translate(modelMatrix, glm::vec3(0.0f));
+    modelMatrix = glm::scale(modelMatrix, glm::vec3(0.5f));
+    shader.setMat4("model", modelMatrix);
+    testModel.Draw(shader);
 }
 
 
@@ -524,27 +531,27 @@ void processDecalMove(GLFWwindow* window)
         lightPos += RightVec * velocity;
 
     // decal move
-    if (glfwGetKey(window, GLFW_KEY_KP_8) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_I) == GLFW_PRESS)
         decal.position += FrontVec * velocity;
-    if (glfwGetKey(window, GLFW_KEY_KP_5) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_K) == GLFW_PRESS)
         decal.position -= FrontVec * velocity;
-    if (glfwGetKey(window, GLFW_KEY_KP_4) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_J) == GLFW_PRESS)
         decal.position -= RightVec * velocity;
-    if (glfwGetKey(window, GLFW_KEY_KP_6) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_L) == GLFW_PRESS)
         decal.position += RightVec * velocity;
-    if (glfwGetKey(window, GLFW_KEY_KP_SUBTRACT) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_SEMICOLON) == GLFW_PRESS)
         decal.position -= UpVec * velocity;
-    if (glfwGetKey(window, GLFW_KEY_KP_ADD) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_APOSTROPHE) == GLFW_PRESS)
         decal.position += UpVec * velocity;
 
     // decal rotation
-    if (glfwGetKey(window, GLFW_KEY_KP_7) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_U) == GLFW_PRESS)
         decal.orientation = glm::rotate(decal.orientation, velocity, RightVec);
-    if (glfwGetKey(window, GLFW_KEY_KP_9) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_O) == GLFW_PRESS)
         decal.orientation = glm::rotate(decal.orientation, -velocity, RightVec);
-    if (glfwGetKey(window, GLFW_KEY_KP_1) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS)
         decal.orientation = glm::rotate(decal.orientation, -velocity, FrontVec);
-    if (glfwGetKey(window, GLFW_KEY_KP_3) == GLFW_PRESS)
+    if (glfwGetKey(window, GLFW_KEY_PERIOD) == GLFW_PRESS)
         decal.orientation = glm::rotate(decal.orientation, velocity, FrontVec);
 }
 

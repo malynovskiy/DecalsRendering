@@ -76,7 +76,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>$(SolutionDir)lib</AdditionalLibraryDirectories>
-      <AdditionalDependencies>glfw3.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>assimp.lib;glfw3.lib;$(CoreLibraryDependencies);%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -93,6 +93,24 @@
     <None Include="src\shaders\depth_map_shader.vert" />
     <None Include="src\shaders\scene_shader.frag" />
     <None Include="src\shaders\scene_shader.vert" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="includes\learnopengl\animation.h" />
+    <ClInclude Include="includes\learnopengl\animator.h" />
+    <ClInclude Include="includes\learnopengl\animdata.h" />
+    <ClInclude Include="includes\learnopengl\assimp_glm_helpers.h" />
+    <ClInclude Include="includes\learnopengl\bone.h" />
+    <ClInclude Include="includes\learnopengl\camera.h" />
+    <ClInclude Include="includes\learnopengl\entity.h" />
+    <ClInclude Include="includes\learnopengl\filesystem.h" />
+    <ClInclude Include="includes\learnopengl\mesh.h" />
+    <ClInclude Include="includes\learnopengl\model.h" />
+    <ClInclude Include="includes\learnopengl\model_animation.h" />
+    <ClInclude Include="includes\learnopengl\shader.h" />
+    <ClInclude Include="includes\learnopengl\shader_c.h" />
+    <ClInclude Include="includes\learnopengl\shader_m.h" />
+    <ClInclude Include="includes\learnopengl\shader_s.h" />
+    <ClInclude Include="includes\learnopengl\shader_t.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
