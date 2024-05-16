@@ -217,7 +217,7 @@ int main()
     // shader configuration
     // --------------------
     shader.use();
-    shader.setInt("diffuseTexture", 0);
+    shader.setInt("texture_diffuse", 0);
     shader.setInt("shadowMap", 1);
 
     debugDepthQuad.use();
@@ -310,6 +310,14 @@ int main()
         glBindTexture(GL_TEXTURE_2D, depthMap);
         renderScene(shader, backpackModel);
 
+        glm::mat4 modelMatrix = glm::mat4(1);
+        modelMatrix = glm::translate(modelMatrix, glm::vec3(0.0f,0.-0.5f, 0.0f));
+        modelMatrix = glm::scale(modelMatrix, glm::vec3(0.5f));
+        shader.setMat4("model", modelMatrix);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, depthMap);
+        backpackModel.Draw(shader);
+
         // render decal position cube
         glm::mat4 model = glm::mat4(1.f);
         model = glm::translate(model, glm::vec3(decal.position.x, decal.position.y, decal.position.z + 0.005f));
@@ -393,12 +401,6 @@ void renderScene(Shader &shader, Model& testModel)
     modelMatrix = glm::scale(modelMatrix, glm::vec3(0.25));
     shader.setMat4("model", modelMatrix);
     renderCube();
-
-    modelMatrix = glm::mat4(1);
-    modelMatrix = glm::translate(modelMatrix, glm::vec3(0.0f));
-    modelMatrix = glm::scale(modelMatrix, glm::vec3(0.5f));
-    shader.setMat4("model", modelMatrix);
-    testModel.Draw(shader);
 }
 
 

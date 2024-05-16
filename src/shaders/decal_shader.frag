@@ -8,6 +8,11 @@ in VS_OUT {
     vec4 FragPosDecalSpace;
 } fs_in;
 
+uniform sampler2D texture_diffuse;
+uniform sampler2D texture_specular;
+uniform sampler2D texture_normal;
+uniform sampler2D texture_height;
+
 uniform sampler2D decalTexture;
 uniform sampler2D depthMap;
 

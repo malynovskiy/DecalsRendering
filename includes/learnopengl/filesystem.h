@@ -4,7 +4,7 @@
 #include <string>
 #include <cstdlib>
 
-const char *logl_root = "C:/Users/maksym/source/repos/DecalsRendering";
+const char *logl_root = "E:/Dev/DecalsRendering";
 
 class FileSystem
 {
