@@ -44,6 +44,12 @@ public:
         for(unsigned int i = 0; i < meshes.size(); i++)
             meshes[i].Draw(shader);
     }
+
+    void DrawDecal(Shader &shader, GLuint decalTexture, GLuint depthMap)
+    {
+        for (unsigned int i = 0; i < meshes.size(); i++)
+            meshes[i].DrawDecal(shader, decalTexture, depthMap);
+    }
     
 private:
     // loads a model with supported ASSIMP extensions from file and stores the resulting meshes in the meshes vector.
